@@ -23,21 +23,8 @@ class EquipoListCreateAPIView(generics.ListCreateAPIView):
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
-        """
-        Devuelve todos los campos necesarios para la lista.
-        """
         busqueda = self.request.query_params.get('busqueda', 'all')
-        
-        # Incluye todos los campos de tu tabla para evitar el KeyError
-        queryset = Equipo.objects.all().order_by('codigo').values(
-            'id', 'codigo', 'codigo_interno', 'equipo', 'marca', 'modelo', 'unidad', 
-            'extraccion', 'host', 'puerto', 'baudios', 'pais', 'sede', 'creacion', 
-            'formato', 'creador', 'update', 'update_user', 'bytesize', 'parity', 
-            'stopbits', 'max_value'
-        )
-        
-        print(f">>> Busqueda recibida: {busqueda}")
-        
+        queryset = Equipo.objects.all().order_by('codigo')
         if busqueda != 'all':
             queryset = queryset.filter(
                 Q(codigo__icontains=busqueda) |
@@ -47,22 +34,15 @@ class EquipoListCreateAPIView(generics.ListCreateAPIView):
                 Q(modelo__icontains=busqueda) |
                 Q(pais__icontains=busqueda)
             )
-            print(f">>> Equipos encontrados tras filtro: {queryset.count()}")
-            
         return queryset
 
-    def post(self, request, *args, **kwargs):
-        try:
-            serializer = EquipoSerializer(data=request.data)
-            if serializer.is_valid():
-                serializer.save(creador=request.user.username)
-                return Response(serializer.data, status=status.HTTP_201_CREATED)
-            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except Exception as e:
-            return Response(
-                {"error": "El codigo utilizado ya existe o hay un error en la creación."},
-                status=status.HTTP_400_BAD_REQUEST
-            )
+    def perform_create(self, serializer):
+        # Guarda creador automáticamente
+        serializer.save(
+            creador=self.request.user.username,
+            creacion=datetime.now()
+        )
+
 
 class EquipoRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Equipo.objects.all()
@@ -71,11 +51,18 @@ class EquipoRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     lookup_field = 'id'
     
     def update(self, request, *args, **kwargs):
-        print(">>> PUT recibido en /equipos/<id>/ con data:", request.data)
         instance = self.get_object()
-        request.data['update'] = datetime.now()
-        request.data['update_user'] = request.user.username
+
+        # Mantener el creador original si no viene
+        if not request.data.get("creador"):
+            request.data["creador"] = instance.creador or request.user.username
+
+        # Actualizar fecha y usuario automáticamente
+        request.data["update"] = datetime.now()
+        request.data["update_user"] = request.user.username
+
         return super().update(request, *args, **kwargs)
+
 
 # Decoramos la clase para eximir temporalmente CSRF y permitir pruebas sin sesión
 @method_decorator(csrf_exempt, name='dispatch')
