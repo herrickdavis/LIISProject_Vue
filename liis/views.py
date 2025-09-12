@@ -55,6 +55,7 @@ class CapturarPesoAPIView(APIView):
     permission_classes = [IsAuthenticated]
 
     def post(self, request):
+        print(request.data)
         ip = request.META.get('REMOTE_ADDR')
         
         # Lógica para manejar la conexión con la balanza
@@ -100,8 +101,9 @@ class CapturarPesoAPIView(APIView):
                           LEFT JOIN [MYLIMS_PRODUCAO].[dbo].[VARENTRADA] VE ON VE.[CDVE] = VEM.[CDVE]
                           WHERE MA.[CDAMOSTRA] = %s AND VE.UNIDADE IN ({placeholders})"""
 
-                params = [codigo_muestra] + unidades
+                params = [codigo_muestra] #+ unidades
                 with connection.cursor() as cursor:
+                    
                     cursor.execute(sql, params)
                     row = cursor.fetchall()
                 

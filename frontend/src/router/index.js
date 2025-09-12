@@ -15,50 +15,44 @@ const router = createRouter({
     },
     {
       path: '/',
-      name: 'CapturarPeso',
+      name: 'CapturaDePeso',
       component: Dashboard,
       meta: { requiresAuth: true }
     },
     {
       path: '/liis/equipos',
-      name: 'EquipoList',
+      name: 'GestionDeEquipos',
       component: EquipoList,
       meta: { requiresAuth: true }
     },
     {
       path: '/liis/agregar-equipo',
-      name: 'EquipoAdd',
+      name: 'AgregarEquipo',
       component: EquipoAddEdit,
       meta: { requiresAuth: true }
     },
     {
       path: '/liis/editar-equipo/:id',
-      name: 'EquipoEdit',
+      name: 'EditarEquipo',
       component: EquipoAddEdit,
       meta: { requiresAuth: true }
     },
     {
       path: '/liis/equipo/:id',
-      name: 'EquipoView',
+      name: 'VerEquipo',
       component: EquipoView,
-      meta: { requiresAuth: true }
-    },
-    {
-      path: '/liis/ejecutable/:nombre',
-      name: 'Ejecutable',
-      component: null, // O un componente que maneje la descarga
       meta: { requiresAuth: true }
     }
   ]
 })
 
 router.beforeEach((to, from, next) => {
-    const isAuthenticated = localStorage.getItem('is_authenticated') === 'true';
-    if (to.meta.requiresAuth && !isAuthenticated) {
-        next({ name: 'login' });
-    } else {
-        next();
-    }
+  const isAuthenticated = localStorage.getItem('is_authenticated') === 'true';
+  if (to.meta.requiresAuth && !isAuthenticated) {
+    next({ name: 'login' });
+  } else {
+    next();
+  }
 });
 
 export default router
