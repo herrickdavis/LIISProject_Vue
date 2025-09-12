@@ -12,21 +12,44 @@ import pandas as pd
 import socket
 import os
 from datetime import datetime
+from django.http import HttpResponse, FileResponse
+
+# para eximir temporalmente CSRF
+from django.utils.decorators import method_decorator
+from django.views.decorators.csrf import csrf_exempt
 
 class EquipoListCreateAPIView(generics.ListCreateAPIView):
-    queryset = Equipo.objects.all().order_by('codigo')
     serializer_class = EquipoSerializer
     permission_classes = [IsAuthenticated]
 
     def get_queryset(self):
+        """
+        Devuelve todos los campos necesarios para la lista.
+        """
         busqueda = self.request.query_params.get('busqueda', 'all')
+        
+        # Incluye todos los campos de tu tabla para evitar el KeyError
+        queryset = Equipo.objects.all().order_by('codigo').values(
+            'id', 'codigo', 'codigo_interno', 'equipo', 'marca', 'modelo', 'unidad', 
+            'extraccion', 'host', 'puerto', 'baudios', 'pais', 'sede', 'creacion', 
+            'formato', 'creador', 'update', 'update_user', 'bytesize', 'parity', 
+            'stopbits', 'max_value'
+        )
+        
+        print(f">>> Busqueda recibida: {busqueda}")
+        
         if busqueda != 'all':
-            return self.queryset.filter(
-                Q(codigo__icontains=busqueda) | Q(codigo_interno__icontains=busqueda) |
-                Q(equipo__icontains=busqueda) | Q(marca__icontains=busqueda) |
-                Q(modelo__icontains=busqueda) | Q(pais__icontains=busqueda)
+            queryset = queryset.filter(
+                Q(codigo__icontains=busqueda) |
+                Q(codigo_interno__icontains=busqueda) |
+                Q(equipo__icontains=busqueda) |
+                Q(marca__icontains=busqueda) |
+                Q(modelo__icontains=busqueda) |
+                Q(pais__icontains=busqueda)
             )
-        return self.queryset
+            print(f">>> Equipos encontrados tras filtro: {queryset.count()}")
+            
+        return queryset
 
     def post(self, request, *args, **kwargs):
         try:
@@ -35,8 +58,11 @@ class EquipoListCreateAPIView(generics.ListCreateAPIView):
                 serializer.save(creador=request.user.username)
                 return Response(serializer.data, status=status.HTTP_201_CREATED)
             return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
-        except Exception:
-            return Response({"error": "El codigo utilizado ya existe en la base de datos."}, status=status.HTTP_400_BAD_REQUEST)
+        except Exception as e:
+            return Response(
+                {"error": "El codigo utilizado ya existe o hay un error en la creación."},
+                status=status.HTTP_400_BAD_REQUEST
+            )
 
 class EquipoRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     queryset = Equipo.objects.all()
@@ -45,47 +71,47 @@ class EquipoRetrieveUpdateDestroyAPIView(generics.RetrieveUpdateDestroyAPIView):
     lookup_field = 'id'
     
     def update(self, request, *args, **kwargs):
+        print(">>> PUT recibido en /equipos/<id>/ con data:", request.data)
         instance = self.get_object()
-        # Modificar los datos del request antes de la actualización
         request.data['update'] = datetime.now()
         request.data['update_user'] = request.user.username
         return super().update(request, *args, **kwargs)
 
+# Decoramos la clase para eximir temporalmente CSRF y permitir pruebas sin sesión
+@method_decorator(csrf_exempt, name='dispatch')
 class CapturarPesoAPIView(APIView):
-    permission_classes = [IsAuthenticated]
+    # poner [] para pruebas; en producción usar IsAuthenticated
+    permission_classes = []
 
     def post(self, request):
-        print(request.data)
+        print(">>> POST recibido en /liis/capturar-peso/")
+        print(">>> Data recibida:", request.data)
         ip = request.META.get('REMOTE_ADDR')
-        
-        # Lógica para manejar la conexión con la balanza
+
         if 'codigo_balanza' in request.data:
             codigo_balanza = request.data['codigo_balanza']
+            print(f">>> Buscando equipo con código de balanza: {codigo_balanza}")
             if not Equipo.objects.filter(codigo=codigo_balanza).exists():
+                print(f">>> Error: No existe el código {codigo_balanza}.")
                 return Response({"cb_error": f"No existe el código: {codigo_balanza} en registro."}, status=status.HTTP_404_NOT_FOUND)
-            
+
             equipo = Equipo.objects.get(codigo=codigo_balanza)
-            nombre_equipo = None
-            try:
-                nombre_equipo = socket.gethostbyaddr(ip)[0]
-            except socket.herror:
-                pass
-            
-            # if equipo.host != nombre_equipo:
-            #     return Response({"cb_error": f"El equipo {nombre_equipo} no corresponde a la información guardada del equipo {codigo_balanza}."}, status=status.HTTP_403_FORBIDDEN)
-            
+            print(f">>> Equipo encontrado: {equipo.equipo}")
+
             if 'conectar' in request.data:
                 try:
+                    print(f">>> Intentando conexión con equipo en puerto {equipo.puerto} desde {ip}")
                     url = f'socket://{ip}:{equipo.puerto}'
                     ser = serial.serial_for_url(url, timeout=1)
                     ser.close()
                     return Response({"balanza": EquipoSerializer(equipo).data, "conectado": True}, status=status.HTTP_200_OK)
-                except Exception:
+                except Exception as e:
+                    print(f">>> Error de conexión con la balanza: {e}")
                     return Response({"error_conexion": "No se pudo conectar"}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
 
-            # Lógica para obtener métodos y mediciones
             codigo_muestra = request.data.get('codigo_muestra')
             if codigo_muestra:
+                print(f">>> Buscando métodos para muestra: {codigo_muestra}")
                 unidades = [equipo.unidad]
                 placeholders = ",".join(["%s"] * len(unidades))
                 sql = f"""SELECT DISTINCT REPLACE(M.[DESCMETODO],'*','') AS METODO,
@@ -99,14 +125,15 @@ class CapturarPesoAPIView(APIView):
                           LEFT JOIN [MYLIMS_PRODUCAO].[dbo].[LABORATORIO] L ON L.[CDLABORATORIO] = MA.[CDLABORATORIO]
                           LEFT JOIN [MYLIMS_PRODUCAO].[dbo].[VEMETODO] VEM ON VEM.[CDMETODO] = MA.[CDMETODO]
                           LEFT JOIN [MYLIMS_PRODUCAO].[dbo].[VARENTRADA] VE ON VE.[CDVE] = VEM.[CDVE]
-                          WHERE MA.[CDAMOSTRA] = %s AND VE.UNIDADE IN ({placeholders})"""
+                          WHERE MA.[CDAMOSTRA] = %s --AND VE.UNIDADE IN ({placeholders})"""
 
                 params = [codigo_muestra] #+ unidades
+                print(f">>> Ejecutando consulta SQL con params: {params}")
                 with connection.cursor() as cursor:
-                    
                     cursor.execute(sql, params)
                     row = cursor.fetchall()
                 
+                print(f">>> Consulta SQL finalizada. Filas encontradas: {len(row)}")
                 metodos = []
                 for r in row:
                     metodos.append({
@@ -123,13 +150,14 @@ class CapturarPesoAPIView(APIView):
                 
                 return Response({"balanza": EquipoSerializer(equipo).data, "metodos": metodos, "codigo_muestra": codigo_muestra}, status=status.HTTP_200_OK)
 
-        # Lógica para la medición y guardar CSV
         if 'medicion' in request.data:
             codigo_balanza = request.data['codigo_balanza']
             codigo_muestra = request.data['codigo_muestra']
             medicion_valor = request.data['medicion']
             ensayo = request.data['ensayo']
-            
+
+            print(f">>> Guardando medición: muestra={codigo_muestra}, equipo={codigo_balanza}, valor={medicion_valor}, ensayo={ensayo}")
+
             equipo = Equipo.objects.get(codigo=codigo_balanza)
             ensayo_split = ensayo.split('-')
             idve = ensayo_split[0]
@@ -141,29 +169,33 @@ class CapturarPesoAPIView(APIView):
                 equipo=equipo,
                 host=ip,
                 ip_host=ip,
-                creador=request.user.username
+                creador=request.user.username if request.user and request.user.is_authenticated else 'anonymous'
             )
-            
+
             fecha = datetime.now().strftime("%d-%m-%Y %H-%M")
             data = {
                 'Codigo': [codigo_muestra, codigo_muestra, codigo_muestra],
                 'IDVE': [idve, f'Instrum_{idve}', f'Analyst_{idve}'],
                 'Fecha': [fecha, fecha, fecha],
-                'Valor': [medicion_valor.replace('.', ','), equipo.codigo_interno, request.user.first_name],
+                'Valor': [medicion_valor.replace('.', ','), equipo.codigo_interno, request.user.first_name if request.user and request.user.is_authenticated else ''],
             }
             df = pd.DataFrame(data).set_index('Codigo')
             ruta_csv = f'C:/Users/francisco.rotundo/Downloads/{idve}-{datetime.now().strftime("%d-%m-%Y_%H-%M")}.csv'
             df.to_csv(ruta_csv, sep=";")
-            
+
+            print(f">>> CSV generado en: {ruta_csv}")
+
             return Response({"message": f'Se generó el archivo {os.path.basename(ruta_csv)}'}, status=status.HTTP_201_CREATED)
-        
+
         return Response({}, status=status.HTTP_200_OK)
 
+
 def ejecutable_view(request, nombre):
-    # La misma lógica que en tu archivo original
     archivo_path = os.path.join(r'C:\Users\Francisco.Rotundo\Downloads\Proyectos\Nueva carpeta (2)\media', f'{ nombre }.exe')
+    print(f">>> Descargando ejecutable solicitado: {archivo_path}")
     if os.path.exists(archivo_path):
         response = FileResponse(open(archivo_path, 'rb'), as_attachment=True, filename=f'{ nombre }.exe')
         response['Content-Type'] = 'application/octet-stream'
         return response
+    print(">>> Archivo no encontrado")
     return HttpResponse('Archivo no encontrado', status=404)

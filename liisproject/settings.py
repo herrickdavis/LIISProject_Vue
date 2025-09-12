@@ -11,7 +11,7 @@ with open(os.path.join(BASE_DIR, 'secret_key.txt')) as f:
 
 DEBUG = True
 ALLOWED_HOSTS = ['*']
-
+DATABASE_ROUTERS = ['liisproject.db_router.LiisRouter']
 INSTALLED_APPS = [
     'django.contrib.admin',
     'django.contrib.auth',
@@ -19,8 +19,9 @@ INSTALLED_APPS = [
     'django.contrib.sessions',
     'django.contrib.messages',
     'django.contrib.staticfiles',
-    'corsheaders',
+    "corsheaders",
     'rest_framework',
+    'rest_framework.authtoken',
     'liis',
     'users',
 ]
@@ -39,6 +40,7 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
     'liisproject.middleware.SessionTimeoutMiddleware',
+   
 ]
 
 ROOT_URLCONF = 'liisproject.urls'
@@ -62,12 +64,8 @@ TEMPLATES = [
 WSGI_APPLICATION = 'liisproject.wsgi.application'
 
 DATABASES = {
-    'default': {   # tu base local para Django
-        'ENGINE': 'django.db.backends.sqlite3',
-        'NAME': BASE_DIR / 'db.sqlite3',
-    },
-    'liis_db': {   # tu BD LIIS
-        'ENGINE': 'sql_server.pyodbc',
+    'default': {
+        'ENGINE': 'mssql',
         'NAME': "BDLIIS",
         'USER': "webtriever",
         'PASSWORD': "M3rc0tec",
@@ -78,8 +76,8 @@ DATABASES = {
             'unicode_results': True,
         }
     },
-    'mylims_db': {   # tu BD MYLIMS_PRODUCAO
-        'ENGINE': 'sql_server.pyodbc',
+    'mylims_db': {
+        'ENGINE': 'mssql',
         'NAME': "MYLIMS_PRODUCAO",
         'USER': "webtriever",
         'PASSWORD': "M3rc0tec",
@@ -110,7 +108,27 @@ DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
 CORS_ALLOW_ALL_ORIGINS = True
 REST_FRAMEWORK = {
+    'DEFAULT_PAGINATION_CLASS': 'rest_framework.pagination.PageNumberPagination',
+    'PAGE_SIZE': 50,
     'DEFAULT_AUTHENTICATION_CLASSES': [
         'rest_framework.authentication.SessionAuthentication',
+        'rest_framework.authentication.TokenAuthentication',
     ],
 }
+
+CORS_ALLOW_CREDENTIALS = True
+
+CORS_ALLOWED_ORIGINS = [
+    "http://localhost:5173",
+    "http://127.0.0.1:5173",
+]
+
+CORS_ALLOW_HEADERS = [
+    "authorization",
+    "content-type",
+    "accept",
+    "origin",
+    "user-agent",
+    "x-csrftoken",
+    "x-requested-with",
+]
