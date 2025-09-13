@@ -112,7 +112,7 @@ class CapturarPesoAPIView(APIView):
                           LEFT JOIN [MYLIMS_PRODUCAO].[dbo].[LABORATORIO] L ON L.[CDLABORATORIO] = MA.[CDLABORATORIO]
                           LEFT JOIN [MYLIMS_PRODUCAO].[dbo].[VEMETODO] VEM ON VEM.[CDMETODO] = MA.[CDMETODO]
                           LEFT JOIN [MYLIMS_PRODUCAO].[dbo].[VARENTRADA] VE ON VE.[CDVE] = VEM.[CDVE]
-                          WHERE MA.[CDAMOSTRA] = %s --AND VE.UNIDADE IN ({placeholders})"""
+                          WHERE MA.[CDAMOSTRA] = ? --AND VE.UNIDADE IN ({placeholders})"""
 
                 params = [codigo_muestra] #+ unidades
                 print(f">>> Ejecutando consulta SQL con params: {params}")
