@@ -49,7 +49,9 @@
                             <input type="text" class="form-control" :class="medicionClass" name="medicion"
                                 v-model="medicion" :disabled="!ensayo" placeholder="Valor de la medición">
                         </div>
-                        <p class="mt-2">{{ rangoMedicion }}</p>
+                        
+                        <p class="mt-2" :class="rangoClass">{{ rangoMedicion }}</p>
+
                     </div>
                 </div>
 
@@ -125,7 +127,7 @@ const handleFormSubmit = async () => {
 const searchBalanza = async () => {
     console.log(">>> Frontend: Enviando búsqueda de balanza:", codigo_balanza_input.value);
     try {
-        const response = await axios.post('http://127.0.0.1:8000/liis/capturar-peso/', {
+        const response = await axios.post('http://127.0.0.1:8000/api/liis/capturar-peso/', {
             codigo_balanza: codigo_balanza_input.value,
             conectar: true
         });
@@ -165,7 +167,7 @@ const searchMetodos = async () => {
         };
         console.log('>>> Frontend: payload (searchMetodos):', payload);
 
-        const response = await axios.post('http://127.0.0.1:8000/liis/capturar-peso/', payload);
+        const response = await axios.post('http://127.0.0.1:8000/api/liis/capturar-peso/', payload);
         console.log(">>> Respuesta backend (searchMetodos):", response.data);
 
         metodos.value = response.data.metodos || [];
@@ -207,7 +209,7 @@ const saveMedicion = async () => {
         };
         console.log('>>> Frontend: payload (saveMedicion):', payload);
 
-        const response = await axios.post('http://127.0.0.1:8000/liis/capturar-peso/', payload);
+        const response = await axios.post('http://127.0.0.1:8000/api/liis/capturar-peso/', payload);
         console.log(">>> Respuesta backend (saveMedicion):", response.data);
         // Reemplazando alert() con una lógica alternativa
         console.log(response.data.message);
